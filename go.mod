@@ -1,4 +1,4 @@
-module github.com/shono-io/milli
+module github.com/shono-io/mini
 
 go 1.22.0
 
