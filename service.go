@@ -28,7 +28,7 @@ func ConfigureCommand(cmd *cobra.Command) {
 	cmd.PersistentFlags().String("shono_url", "tls://connect.ngs.global", "The URL of the shono nats server")
 }
 
-func FromViper(viper *viper.Viper) (*Service, error) {
+func FromViper(viper *viper.Viper, opts ...Option) (*Service, error) {
 	env := viper.GetString("env")
 	if env == "" {
 		return nil, fmt.Errorf("env is required")
@@ -38,8 +38,6 @@ func FromViper(viper *viper.Viper) (*Service, error) {
 	if id == "" {
 		return nil, fmt.Errorf("id is required")
 	}
-
-	var opts []Option
 
 	// -- required
 	account := viper.GetString("shono_account")
