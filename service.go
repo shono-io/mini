@@ -49,7 +49,7 @@ func FromViper(viper *viper.Viper, opts ...Option) (*Service, error) {
 
 	jwt := viper.GetString("shono-jwt")
 	seed := viper.GetString("shono-seed")
-	if jwt == "" && seed == "" {
+	if jwt != "" && seed != "" {
 		opts = append(opts, WithCredentials(jwt, seed))
 	}
 
