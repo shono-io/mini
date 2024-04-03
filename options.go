@@ -3,17 +3,25 @@ package mini
 import "github.com/nats-io/nats.go"
 
 type Options struct {
-	Name        string
-	Description string
-	Version     string
-	Account     string
-	NatsUrl     string
-	NatsOptions []nats.Option
-	LogLevel    string
-	Endpoints   []EndpointInitializer
+	Name          string
+	Description   string
+	Version       string
+	Account       string
+	NatsUrl       string
+	NatsOptions   []nats.Option
+	LogLevel      string
+	Endpoints     []EndpointInitializer
+	ConfigWatched bool
 }
 
 type Option func(*Options) error
+
+func WithConfigWatched() Option {
+	return func(o *Options) error {
+		o.ConfigWatched = true
+		return nil
+	}
+}
 
 func WithLogLevel(level string) Option {
 	return func(o *Options) error {

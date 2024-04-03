@@ -112,15 +112,6 @@ func NewService(env string, id string, opts ...Option) (*Service, error) {
 		return nil, fmt.Errorf("failed to create jetstream context: %w", err)
 	}
 
-	configStore, err := js.KeyValue(context.Background(), "config")
-	if err != nil {
-		return nil, fmt.Errorf("failed to get the jetstream config store: %w", err)
-	}
-
-	configFilter := fmt.Sprintf("client.%s.env.%s.service.%s.config", options.Account, env, id)
-	logger.Info().Msgf("watching config for configuration changes at %q", configFilter)
-	configWatcher, err := configStore.Watch(context.Background(), configFilter)
-
 	scfg := micro.Config{
 		Name:        options.Name,
 		Description: options.Description,
@@ -139,19 +130,23 @@ func NewService(env string, id string, opts ...Option) (*Service, error) {
 	}
 
 	result := &Service{
-		account: options.Account,
-		micro:   srv,
-		nc:      nc,
-		js:      js,
-		Log:     &logger,
-		cs:      configStore,
-		cw:      configWatcher,
+		env:         env,
+		id:          id,
+		account:     options.Account,
+		micro:       srv,
+		nc:          nc,
+		js:          js,
+		Log:         &logger,
+		watchConfig: options.ConfigWatched,
+		done:        make(chan struct{}),
 	}
 
 	return result, nil
 }
 
 type Service struct {
+	env     string
+	id      string
 	account string
 
 	micro micro.Service
@@ -159,8 +154,9 @@ type Service struct {
 	js    jetstream.JetStream
 	Log   *zerolog.Logger
 
-	cs jetstream.KeyValue
-	cw jetstream.KeyWatcher
+	watchConfig bool
+
+	done chan struct{}
 }
 
 func (s *Service) AddGroup(name string, opt ...micro.GroupOpt) micro.Group {
@@ -172,6 +168,7 @@ func (s *Service) AddEndpoint(name string, handler micro.Handler, opt ...micro.E
 }
 
 func (s *Service) Close() {
+	close(s.done)
 	s.nc.Close()
 }
 
@@ -182,13 +179,30 @@ func (s *Service) InitEndpoints() error {
 func (s *Service) Run(ctx context.Context, worker Worker) error {
 	defer worker.Close()
 
+	var configChan <-chan jetstream.KeyValueEntry
+	if s.watchConfig {
+		configStore, err := s.js.KeyValue(context.Background(), "config")
+		if err != nil {
+			return fmt.Errorf("failed to get the jetstream config store: %w", err)
+		}
+
+		configFilter := fmt.Sprintf("client.%s.env.%s.service.%s.config", s.account, s.env, s.id)
+		s.Log.Info().Msgf("watching config for configuration changes at %q", configFilter)
+		configWatcher, err := configStore.Watch(context.Background(), configFilter)
+		configChan = configWatcher.Updates()
+	} else {
+		configChan = make(chan jetstream.KeyValueEntry)
+	}
+
 	if err := worker.Init(s); err != nil {
 		return fmt.Errorf("failed to initialize worker: %w", err)
 	}
 
 	for {
 		select {
-		case kve := <-s.cw.Updates():
+		case <-s.done:
+			return nil
+		case kve := <-configChan:
 			if kve == nil {
 				continue
 			}
