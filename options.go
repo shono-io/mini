@@ -9,10 +9,18 @@ type Options struct {
 	Account     string
 	NatsUrl     string
 	NatsOptions []nats.Option
+	LogLevel    string
 	Endpoints   []EndpointInitializer
 }
 
 type Option func(*Options) error
+
+func WithLogLevel(level string) Option {
+	return func(o *Options) error {
+		o.LogLevel = level
+		return nil
+	}
+}
 
 func WithNatsUrl(url string) Option {
 	return func(o *Options) error {
