@@ -70,12 +70,7 @@ func FromViper(viper *viper.Viper, opts ...Option) (*Service, error) {
 		opts = append(opts, WithVersion(version))
 	}
 
-	loglevel, err := zerolog.ParseLevel(viper.GetString("loglevel"))
-	if err != nil {
-		log.Warn().Err(err).Msg("failed to parse log level, reverting to INFO")
-		loglevel = zerolog.InfoLevel
-	}
-	zerolog.SetGlobalLevel(loglevel)
+	opts = append(opts, WithLogLevel(viper.GetString("loglevel")))
 
 	return NewService(env, id, opts...)
 }
@@ -100,8 +95,9 @@ func NewService(env string, id string, opts ...Option) (*Service, error) {
 		log.Warn().Msgf("failed to parse log level, reverting to INFO")
 		lvl = zerolog.InfoLevel
 	}
+	zerolog.SetGlobalLevel(lvl)
 
-	logger := log.Level(lvl).With().Str("service", id).Logger()
+	logger := log.With().Str("service", id).Logger()
 
 	nc, err := nats.Connect(options.NatsUrl, options.NatsOptions...)
 	if err != nil {
