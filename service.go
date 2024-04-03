@@ -178,6 +178,8 @@ func (s *Service) InitEndpoints() error {
 
 func (s *Service) Run(ctx context.Context, worker Worker) error {
 	defer worker.Close()
+	s.Log.Info().Msg("Service starting")
+	defer s.Log.Info().Msg("Service Stopped")
 
 	var configChan <-chan jetstream.KeyValueEntry
 	if s.watchConfig {
@@ -198,6 +200,7 @@ func (s *Service) Run(ctx context.Context, worker Worker) error {
 		return fmt.Errorf("failed to initialize worker: %w", err)
 	}
 
+	s.Log.Info().Msg("Service started")
 	for {
 		select {
 		case <-s.done:
@@ -211,12 +214,13 @@ func (s *Service) Run(ctx context.Context, worker Worker) error {
 				continue
 			}
 
-			log.Info().Msgf("worker configuration updated: ")
+			s.Log.Info().Msgf("worker configuration updated: ")
 			if err := worker.Load(ctx, kve.Value()); err != nil {
-				log.Error().Err(err).Msg("failed to load config into the worker")
+				s.Log.Error().Err(err).Msg("failed to load config into the worker")
 			}
 		}
 	}
+
 }
 
 func (s *Service) JetStream() jetstream.JetStream {
