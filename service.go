@@ -139,18 +139,21 @@ func NewService(env string, id string, opts ...Option) (*Service, error) {
 	}
 
 	result := &Service{
-		micro: srv,
-		nc:    nc,
-		js:    js,
-		Log:   &logger,
-		cs:    configStore,
-		cw:    configWatcher,
+		account: options.Account,
+		micro:   srv,
+		nc:      nc,
+		js:      js,
+		Log:     &logger,
+		cs:      configStore,
+		cw:      configWatcher,
 	}
 
 	return result, nil
 }
 
 type Service struct {
+	account string
+
 	micro micro.Service
 	nc    *nats.Conn
 	js    jetstream.JetStream
@@ -158,6 +161,14 @@ type Service struct {
 
 	cs jetstream.KeyValue
 	cw jetstream.KeyWatcher
+}
+
+func (s *Service) AddGroup(name string, opt ...micro.GroupOpt) micro.Group {
+	return s.micro.AddGroup(name, opt...)
+}
+
+func (s *Service) AddEndpoint(name string, handler micro.Handler, opt ...micro.EndpointOpt) error {
+	return s.micro.AddEndpoint(name, handler, opt...)
 }
 
 func (s *Service) Close() {
@@ -204,4 +215,8 @@ func (s *Service) Nats() *nats.Conn {
 
 func (s *Service) Micro() micro.Service {
 	return s.micro
+}
+
+func (s *Service) Account() string {
+	return s.account
 }
