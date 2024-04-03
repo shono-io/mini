@@ -74,7 +74,7 @@ func WithVersion(version string) Option {
 
 func WithCredentials(jwt string, seed string) Option {
 	return func(o *Options) error {
-		o.NatsOptions = append(o.NatsOptions, nats.UserCredentials(jwt, seed))
+		o.NatsOptions = append(o.NatsOptions, nats.UserJWTAndSeed(jwt, seed))
 		return nil
 	}
 }
