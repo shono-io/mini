@@ -22,10 +22,11 @@ func ConfigureCommand(cmd *cobra.Command) {
 	cmd.PersistentFlags().String("description", "", "service description")
 	cmd.PersistentFlags().String("version", "", "service version")
 
-	cmd.PersistentFlags().String("shono_account", "", "The shono account identifier")
-	cmd.PersistentFlags().String("shono_jwt", "", "The shono JWT Token")
-	cmd.PersistentFlags().String("shono_seed", "", "The shono Seed")
-	cmd.PersistentFlags().String("shono_url", "tls://connect.ngs.global", "The URL of the shono nats server")
+	cmd.PersistentFlags().String("shono-account", "", "The shono account identifier")
+	cmd.PersistentFlags().String("shono-jwt", "", "The shono JWT Token")
+	cmd.PersistentFlags().String("shono-seed", "", "The shono Seed")
+	cmd.PersistentFlags().String("shono-url", "tls://connect.ngs.global", "The URL of the shono nats server")
+	cmd.PersistentFlags().String("loglevel", "INFO", "The log level for the service")
 }
 
 func FromViper(viper *viper.Viper, opts ...Option) (*Service, error) {
@@ -40,20 +41,20 @@ func FromViper(viper *viper.Viper, opts ...Option) (*Service, error) {
 	}
 
 	// -- required
-	account := viper.GetString("shono_account")
+	account := viper.GetString("shono-account")
 	if account == "" {
 		return nil, fmt.Errorf("shono_account is required")
 	}
 	opts = append(opts, WithAccount(account))
 
-	jwt := viper.GetString("shono_jwt")
-	seed := viper.GetString("shono_seed")
+	jwt := viper.GetString("shono-jwt")
+	seed := viper.GetString("shono-seed")
 	if jwt == "" && seed == "" {
 		opts = append(opts, WithCredentials(jwt, seed))
 	}
 
 	// -- optionals
-	if natsUrl := viper.GetString("shono_url"); natsUrl != "" {
+	if natsUrl := viper.GetString("shono-url"); natsUrl != "" {
 		opts = append(opts, WithNatsUrl(natsUrl))
 	}
 
