@@ -2,10 +2,12 @@ package mini
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"net/http"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
@@ -196,6 +198,27 @@ func (s *Service) Run(ctx context.Context, worker Worker) error {
 	if err := worker.Init(s); err != nil {
 		return fmt.Errorf("failed to initialize worker: %w", err)
 	}
+
+	go func() {
+		if err := http.ListenAndServe(":8080", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet {
+				w.WriteHeader(http.StatusMethodNotAllowed)
+				return
+			}
+
+			info := s.micro.Info()
+			b, err := json.Marshal(info)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+
+			w.WriteHeader(http.StatusOK)
+			w.Write(b)
+		})); err != nil {
+			s.Log.Error().Err(err).Msg("failed to start http server")
+		}
+	}()
 
 	s.Log.Info().Msg("Service started")
 	for {
