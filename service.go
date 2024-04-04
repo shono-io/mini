@@ -27,6 +27,7 @@ func ConfigureCommand(cmd *cobra.Command) {
 	cmd.PersistentFlags().String("shono-account", "", "The shono account identifier")
 	cmd.PersistentFlags().String("shono-jwt", "", "The shono JWT Token")
 	cmd.PersistentFlags().String("shono-seed", "", "The shono Seed")
+	cmd.PersistentFlags().String("shono-creds-file", "", "The shono credentials file")
 	cmd.PersistentFlags().String("shono-url", "tls://connect.ngs.global", "The URL of the shono nats server")
 	cmd.PersistentFlags().String("loglevel", "INFO", "The log level for the service")
 }
@@ -51,7 +52,10 @@ func FromViper(viper *viper.Viper, opts ...Option) (*Service, error) {
 
 	jwt := viper.GetString("shono-jwt")
 	seed := viper.GetString("shono-seed")
-	if jwt != "" && seed != "" {
+	credsFile := viper.GetString("shono-creds-file")
+	if credsFile != "" {
+		opts = append(opts, WithCredentialsFile(credsFile))
+	} else if jwt != "" && seed != "" {
 		opts = append(opts, WithCredentials(jwt, seed))
 	}
 

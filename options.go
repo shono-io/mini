@@ -78,3 +78,10 @@ func WithCredentials(jwt string, seed string) Option {
 		return nil
 	}
 }
+
+func WithCredentialsFile(file string) Option {
+	return func(o *Options) error {
+		o.NatsOptions = append(o.NatsOptions, nats.UserCredentials(file))
+		return nil
+	}
+}
