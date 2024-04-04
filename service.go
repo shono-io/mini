@@ -195,7 +195,8 @@ func (s *Service) Run(ctx context.Context, worker Worker) error {
 		configChan = make(chan jetstream.KeyValueEntry)
 	}
 
-	if err := worker.Init(s); err != nil {
+	wcc := make(chan []byte)
+	if err := worker.Init(s, wcc); err != nil {
 		return fmt.Errorf("failed to initialize worker: %w", err)
 	}
 
@@ -220,6 +221,12 @@ func (s *Service) Run(ctx context.Context, worker Worker) error {
 		}
 	}()
 
+	go func() {
+		if err := worker.Run(ctx); err != nil {
+			s.Log.Error().Err(err).Msg("failed to load config into the worker")
+		}
+	}()
+
 	s.Log.Info().Msg("Service started")
 	for {
 		select {
@@ -234,10 +241,8 @@ func (s *Service) Run(ctx context.Context, worker Worker) error {
 				continue
 			}
 
-			s.Log.Info().Msgf("worker configuration updated: ")
-			if err := worker.Load(ctx, kve.Value()); err != nil {
-				s.Log.Error().Err(err).Msg("failed to load config into the worker")
-			}
+			s.Log.Info().Msgf("worker configuration updated")
+			wcc <- kve.Value()
 		}
 	}
 
