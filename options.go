@@ -3,10 +3,7 @@ package mini
 import "github.com/nats-io/nats.go"
 
 type Options struct {
-	Name          string
-	Description   string
-	Version       string
-	Account       string
+	Path          string
 	NatsUrl       string
 	NatsOptions   []nats.Option
 	LogLevel      string
@@ -44,30 +41,9 @@ func WithEndpoints(endpoints ...EndpointInitializer) Option {
 	}
 }
 
-func WithAccount(account string) Option {
+func WithPath(path string) Option {
 	return func(o *Options) error {
-		o.Account = account
-		return nil
-	}
-}
-
-func WithName(name string) Option {
-	return func(o *Options) error {
-		o.Name = name
-		return nil
-	}
-}
-
-func WithDescription(desc string) Option {
-	return func(o *Options) error {
-		o.Description = desc
-		return nil
-	}
-}
-
-func WithVersion(version string) Option {
-	return func(o *Options) error {
-		o.Version = version
+		o.Path = path
 		return nil
 	}
 }

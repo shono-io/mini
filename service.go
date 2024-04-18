@@ -4,25 +4,20 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/rs/zerolog"
-	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
-	"net/http"
-
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/nats-io/nats.go/micro"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
+	"net/http"
 )
 
 type EndpointInitializer func(s *Service) error
 
 func ConfigureCommand(cmd *cobra.Command) {
-	cmd.PersistentFlags().String("env", "", "environment")
-	cmd.PersistentFlags().String("id", "", "service id")
-	cmd.PersistentFlags().String("name", "", "service name")
-	cmd.PersistentFlags().String("description", "", "service description")
-	cmd.PersistentFlags().String("version", "", "service version")
+	cmd.PersistentFlags().String("path", "", "service config path")
 
 	cmd.PersistentFlags().String("shono-account", "", "The shono account identifier")
 	cmd.PersistentFlags().String("shono-jwt", "", "The shono JWT Token")
@@ -33,23 +28,13 @@ func ConfigureCommand(cmd *cobra.Command) {
 }
 
 func FromViper(viper *viper.Viper, opts ...Option) (*Service, error) {
-	env := viper.GetString("env")
-	if env == "" {
-		return nil, fmt.Errorf("env is required")
+	path := viper.GetString("path")
+	if path == "" {
+		return nil, fmt.Errorf("path is required")
 	}
-
-	id := viper.GetString("id")
-	if id == "" {
-		return nil, fmt.Errorf("id is required")
-	}
+	opts = append(opts, WithPath(path))
 
 	// -- required
-	account := viper.GetString("shono-account")
-	if account == "" {
-		return nil, fmt.Errorf("shono_account is required")
-	}
-	opts = append(opts, WithAccount(account))
-
 	jwt := viper.GetString("shono-jwt")
 	seed := viper.GetString("shono-seed")
 	credsFile := viper.GetString("shono-creds-file")
@@ -64,29 +49,14 @@ func FromViper(viper *viper.Viper, opts ...Option) (*Service, error) {
 		opts = append(opts, WithNatsUrl(natsUrl))
 	}
 
-	if name := viper.GetString("name"); name != "" {
-		opts = append(opts, WithName(name))
-	}
-
-	if description := viper.GetString("description"); description != "" {
-		opts = append(opts, WithDescription(description))
-	}
-
-	if version := viper.GetString("version"); version != "" {
-		opts = append(opts, WithVersion(version))
-	}
-
 	opts = append(opts, WithLogLevel(viper.GetString("loglevel")))
 
-	return NewService(env, id, opts...)
+	return NewService(opts...)
 }
 
-func NewService(env string, id string, opts ...Option) (*Service, error) {
+func NewService(opts ...Option) (*Service, error) {
 	options := &Options{
-		NatsUrl:     "tls://connect.ngs.global",
-		Name:        id,
-		Description: fmt.Sprintf("service %q", id),
-		Version:     "0.0.0",
+		NatsUrl: "tls://connect.ngs.global",
 	}
 
 	for _, o := range opts {
@@ -103,8 +73,6 @@ func NewService(env string, id string, opts ...Option) (*Service, error) {
 	}
 	zerolog.SetGlobalLevel(lvl)
 
-	logger := log.With().Str("service", id).Logger()
-
 	nc, err := nats.Connect(options.NatsUrl, options.NatsOptions...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to nats: %w", err)
@@ -115,10 +83,28 @@ func NewService(env string, id string, opts ...Option) (*Service, error) {
 		return nil, fmt.Errorf("failed to create jetstream context: %w", err)
 	}
 
+	meta, err := js.KeyValue(context.Background(), "meta")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get the jetstream meta store: %w", err)
+	}
+
+	configKv, err := meta.Get(context.Background(), options.Path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get the service configuration: %w", err)
+	}
+
+	// -- parse the configuration
+	var m Meta
+	if err := json.Unmarshal(configKv.Value(), &m); err != nil {
+		return nil, fmt.Errorf("failed to parse the service configuration: %w", err)
+	}
+
+	logger := log.With().Str("service", m.Id).Logger()
+
 	scfg := micro.Config{
-		Name:        options.Name,
-		Description: options.Description,
-		Version:     options.Version,
+		Name:        m.Name,
+		Description: m.Description,
+		Version:     m.Version,
 		DoneHandler: func(srv micro.Service) {
 			logger.Info().Msg("service stopped")
 		},
@@ -133,12 +119,12 @@ func NewService(env string, id string, opts ...Option) (*Service, error) {
 	}
 
 	result := &Service{
-		env:         env,
-		id:          id,
-		account:     options.Account,
+		Meta:        m,
 		micro:       srv,
 		nc:          nc,
 		js:          js,
+		kv:          meta,
+		path:        options.Path,
 		Log:         &logger,
 		watchConfig: options.ConfigWatched,
 		done:        make(chan struct{}),
@@ -148,13 +134,13 @@ func NewService(env string, id string, opts ...Option) (*Service, error) {
 }
 
 type Service struct {
-	env     string
-	id      string
-	account string
+	Meta
+	path string
 
 	micro micro.Service
 	nc    *nats.Conn
 	js    jetstream.JetStream
+	kv    jetstream.KeyValue
 	Log   *zerolog.Logger
 
 	watchConfig bool
@@ -186,14 +172,12 @@ func (s *Service) Run(ctx context.Context, worker Worker) error {
 
 	var configChan <-chan jetstream.KeyValueEntry
 	if s.watchConfig {
-		configStore, err := s.js.KeyValue(context.Background(), "config")
+		s.Log.Info().Msgf("watching config for configuration changes at %q", s.path)
+		configWatcher, err := s.kv.Watch(context.Background(), s.path)
 		if err != nil {
-			return fmt.Errorf("failed to get the jetstream config store: %w", err)
+			return fmt.Errorf("failed to watch for configuration changes: %w", err)
 		}
 
-		configFilter := fmt.Sprintf("client.%s.env.%s.service.%s.config", s.account, s.env, s.id)
-		s.Log.Info().Msgf("watching config for configuration changes at %q", configFilter)
-		configWatcher, err := configStore.Watch(context.Background(), configFilter)
 		configChan = configWatcher.Updates()
 	} else {
 		configChan = make(chan jetstream.KeyValueEntry)
@@ -245,8 +229,14 @@ func (s *Service) Run(ctx context.Context, worker Worker) error {
 				continue
 			}
 
+			var newMeta Meta
+			if err := json.Unmarshal(kve.Value(), &newMeta); err != nil {
+				s.Log.Error().Err(err).Msg("failed to parse configuration; not updating worker")
+				continue
+			}
+
 			s.Log.Info().Msgf("worker configuration updated")
-			wcc <- kve.Value()
+			wcc <- []byte(newMeta.Config)
 		}
 	}
 
@@ -262,8 +252,4 @@ func (s *Service) Nats() *nats.Conn {
 
 func (s *Service) Micro() micro.Service {
 	return s.micro
-}
-
-func (s *Service) Account() string {
-	return s.account
 }
