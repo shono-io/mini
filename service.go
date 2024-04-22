@@ -94,12 +94,10 @@ func NewService(opts ...Option) (*Service, error) {
 	}
 
 	// -- parse the configuration
-	var me MetaEnvelope
-	if err := json.Unmarshal(configKv.Value(), &me); err != nil {
+	var m Meta
+	if err := json.Unmarshal(configKv.Value(), &m); err != nil {
 		return nil, fmt.Errorf("failed to parse the service configuration: %w", err)
 	}
-
-	m := me.Data
 
 	pp := strings.Split(options.Path, ".")
 	id := pp[len(pp)-1]
