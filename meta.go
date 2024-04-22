@@ -1,17 +1,14 @@
 package mini
 
 type MetaEnvelope struct {
-    Path string
-    Data Meta
+	Path string `json:"path"`
+	Data Meta   `json:"data"`
 }
 
 type Meta struct {
-    Client      string
-    Environment string
-    Id          string
-    Name        string
-    Kind        string
-    Description string
-    Version     string
-    Config      string
+	Name        string `json:"name"`
+	Kind        string `json:"kind"`
+	Description string `json:"description"`
+	Version     string `json:"version"`
+	Config      string `json:"config"`
 }
