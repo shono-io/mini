@@ -231,14 +231,14 @@ func (s *Service) Run(ctx context.Context, worker Worker) error {
 				continue
 			}
 
-			var newMeta MetaEnvelope
+			var newMeta Meta
 			if err := json.Unmarshal(kve.Value(), &newMeta); err != nil {
 				s.Log.Error().Err(err).Msg("failed to parse configuration; not updating worker")
 				continue
 			}
 
 			s.Log.Info().Msgf("worker configuration updated")
-			wcc <- []byte(newMeta.Data.Config)
+			wcc <- []byte(newMeta.Config)
 		}
 	}
 }
